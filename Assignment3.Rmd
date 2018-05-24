@@ -28,40 +28,284 @@ P.P.P.S. At least one plot for results and a plot for quality of each model (her
 1.3. Social IQ and ADOS
 
 ```{r}
-pacman::p_load(ggplot2, rethinking)
+pacman::p_load(ggplot2, rethinking, gridExtra)
+
+### ---------------- ###
+### PRELIMINARY WORK ###
+### ---------------- ###
 
 d = read.csv("Assignment3Data.csv")
 d_d= subset(d, Visit == 1 & ASD == 1)
 d1 = d_d[complete.cases(d_d),]
 
-ggplot(d1, aes(ADOS, NonVerbalIQ)) +
+## Visualize
+# Nonverbal
+a = ggplot(d1, aes(ADOS, NonVerbalIQ)) +
   geom_point()
 
-ggplot(d_d, aes(ADOS, VerbalIQ)) +
+# Verbal
+b = ggplot(d1, aes(ADOS, VerbalIQ)) +
   geom_point()
 
-ggplot(d_d, aes(ADOS, SocialIQ)) +
+# Social
+c = ggplot(d1, aes(ADOS, SocialIQ)) +
   geom_point()
 
+gridExtra::grid.arrange(a,b,c)
+
+# Find the ADOS = 0 kid
+d1[which(d1$ADOS == 0), ]
+
+# Plot the TD kids
+d_d= subset(d, Visit == 1 & ASD == 0)
+d2 = d_d[complete.cases(d_d),]
+# Nonverbal
+a = ggplot(d2, aes(ADOS, NonVerbalIQ)) +
+  geom_point()
+
+# Verbal
+b = ggplot(d2, aes(ADOS, VerbalIQ)) +
+  geom_point()
+
+# Social
+c = ggplot(d2, aes(ADOS, SocialIQ)) +
+  geom_point()
+
+gridExtra::grid.arrange(a,b,c)
+
+# Exclude the guy who scores 0 on ADOS but has ASD
+d1 = subset(d1, ADOS > 0)
+
+# Do centering and standardizing to scale and because of correlations
+# Centering
+d1$ADOS.c = d1$ADOS - mean(d1$ADOS)
+d1$VerbalIQ.c = d1$VerbalIQ - mean(d1$VerbalIQ)
+d1$NonVerbalIQ.c = d1$NonVerbalIQ - mean(d1$NonVerbalIQ)
+d1$SocialIQ.c = d1$SocialIQ - mean(d1$SocialIQ)
+
+# Standardize
+d1$NonVerbalIQ.s <- (d1$NonVerbalIQ.c-mean(d1$NonVerbalIQ.c))/sd(d1$NonVerbalIQ.c)
+d1$VerbalIQ.s <- (d1$VerbalIQ.c-mean(d1$VerbalIQ.c))/sd(d1$VerbalIQ.c)
+d1$SocialIQ.s <- (d1$SocialIQ.c-mean(d1$SocialIQ.c))/sd(d1$SocialIQ.c)
+d1$ADOS.s <- (d1$ADOS.c-mean(d1$ADOS.c))/sd(d1$ADOS.c)
+
+d1$ADOS.s = scale(d1$ADOS)
+
+# Info for the priors
 mean(d1$VerbalIQ)
+mean(d1$NonVerbalIQ)
+mean(d1$SocialIQ)
 sd(d1$VerbalIQ)
+sd(d1$NonVerbalIQ)
+sd(d1$SocialIQ)
+
+```
+
+
+
+```{r}
+### ----------------------- ###
+### BUILD MODELS FOR 3 IQ's ###
+### ----------------------- ###
+
+# Use non-scaled values for the models with single predictors (to be able to interpret better)
 
 # The model for verbal IQ
-model <- map(
+V_model <- map(
   alist(
-    VerbalIQ ~ dnorm(mu,sigma),
-    mu <- a + b*ADOS,
-    a ~ dnorm(18, 7.6), #VerbalIQ
+    VerbalIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(17.5, 7.2), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
     b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
-    sigma ~ dunif(0, 50)
+    sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
 )
-precis(model)
+precis(V_model, corr = T)
+precis_plot(precis(V_model, corr = T))
+
+# The model for nonverbal IQ
+nV_model <- map(
+  alist(
+    NonVerbalIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(26.8, 5.5), #NonVerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(nV_model, corr = T)
+precis_plot(precis(nV_model, corr = T))
+
+# The model for social IQ
+S_model <- map(
+  alist(
+    SocialIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(S_model, corr = T)
+precis_plot(precis(S_model, corr = T))
+
+## Uhh, scaled versions:
+# The model for verbal IQ
+V_model <- map(
+  alist(
+    VerbalIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS.s, #linear model
+    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(V_model, corr = T)
+precis_plot(precis(V_model, corr = T))
+
+# The model for nonverbal IQ
+nV_model <- map(
+  alist(
+    NonVerbalIQ.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS.s, #linear model
+    a ~ dnorm(26.8, 5.5), #NonVerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(nV_model, corr = T)
+precis_plot(precis(nV_model, corr = T))
+
+# The model for social IQ
+S_model <- map(
+  alist(
+    SocialIQ.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS.s, #linear model
+    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(S_model, corr = T)
+precis_plot(precis(S_model, corr = T))
+```
 
 
+```{r}
+### ----------------------------------------------- ###
+### QUALITY OF MODELS - PERCENTILE INTERVAL OF MEAN ###
+### ----------------------------------------------- ###
 
-#flist = alist( )
+# VerbalIQ
+# Compute percentile interval of mean
+V.seq <- seq( from=-3 , to=30 , length.out=30 )
+mu <- link(V_model, data=data.frame(ADOS=V.seq) )
+mu.PI <- apply( mu , 2 , PI )
+# plot it all
+a = plot( VerbalIQ ~ ADOS , data=d1 , col=rangi2 ) + 
+  abline( V_model ) +
+  shade( mu.PI , V.seq )
+
+# NonVerbalIQ
+# Compute percentile interval of mean
+nV.seq <- seq( from=-3 , to=40 , length.out=30 )
+mu <- link(nV_model, data=data.frame(ADOS=nV.seq) )
+mu.PI <- apply( mu , 2 , PI )
+# plot it all
+b = plot( NonVerbalIQ ~ ADOS , data=d1 , col=rangi2 ) + 
+  abline( nV_model ) +
+  shade( mu.PI , nV.seq )
+
+# SocialIQ
+# Compute percentile interval of mean
+S.seq <- seq( from=-3 , to=30 , length.out=150 )
+mu <- link(S_model, data=data.frame(ADOS=S.seq) )
+mu.PI <- apply( mu , 2 , PI )
+# plot it all
+c = plot( SocialIQ ~ ADOS , data=d1 , col=rangi2 ) + 
+  abline( S_model ) +
+  shade( mu.PI , S.seq )
+
+### ---------------------------------- ###
+### SECOND QUALITY CHECK - UNCERTANITY ###
+### ---------------------------------- ###
+
+# Need to add uncertainty on the plot, get samples of posterior distribution
+V_post = extract.samples(V_model)
+nV_post = extract.samples(nV_model)
+S_post = extract.samples(S_model)
+
+# Same for all
+N = 33 #all people
+dN = d1[1:N,]
+
+# Verbal IQ
+V <- map(
+  alist(
+    VerbalIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(18, 7.6), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = dN
+)
+
+# NonVerbal IQ
+nV <- map(
+  alist(
+    NonVerbalIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(26.8, 5.5), #NonVerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = dN
+)
+
+# The model for social IQ
+S <- map(
+  alist(
+    SocialIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = dN
+)
+
+# Now plot 20 of these lines to see the uncertainty
+## Extract the 20 samples
+V_post = extract.samples(V, n=20)
+nV_post = extract.samples(nV, n=20)
+S_post = extract.samples(S, n=20)
+
+## Display raw data and sample size
+u_V = plot(dN$ADOS , dN$VerbalIQ ,
+     xlim=range(d1$ADOS) , ylim=range(d1$VerbalIQ) ,
+     col=rangi2 , xlab="ADOS" , ylab="Verbal IQ" ) + 
+  mtext(concat("N = ",N)) + 
+  for ( i in 1:20 ) abline(a= V_post$a[i] , b= V_post$b[i] , col=col.alpha("black",0.3) )
+
+u_nV = plot(dN$ADOS , dN$NonVerbalIQ ,
+     xlim=range(d1$ADOS) , ylim=range(d1$NonVerbalIQ) ,
+     col=rangi2 , xlab="ADOS" , ylab="Nonverbal IQ" ) + 
+  mtext(concat("N = ",N)) + 
+  for ( i in 1:20 ) abline(a= nV_post$a[i] , b= nV_post$b[i] , col=col.alpha("black",0.3) )
+
+u_S = plot(dN$ADOS , dN$SocialIQ ,
+     xlim=range(d1$ADOS) , ylim=range(d1$SocialIQ) ,
+     col=rangi2 , xlab="ADOS" , ylab="Social IQ" ) + 
+  mtext(concat("N = ",N)) + 
+  for ( i in 1:20 ) abline(a= S_post$a[i] , b= S_post$b[i] , col=col.alpha("black",0.3) )
+
 ```
 
 
@@ -69,7 +313,142 @@ precis(model)
 2.1. Does it make sense to have all IQ measures in the same model? First write a few lines answering the question and motivating your answer, including a discussion as to what happens when you put all of them in the same model. Then build a model following your answer. If your answer is "no", you are not free, you still have to answer: are there alternative ways of answering the question?
 2.2. Build the model, assess its quality, write a few lines interpreting the results.
 
+```{r}
+# Let's do a multiple regression
+# Run it again with all of them - this time scaled variables because easier to compare
+model.all.s <- map(
+  alist(
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bNon*NonVerbalIQ.s + bVer*VerbalIQ.s + bSoc*SocialIQ.s, #linear model
+    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
+    bVer ~ dnorm(0, 10),
+    bSoc ~ dnorm(0, 10),
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(model.all.s, corr = T)
+precis_plot(precis(model.all.s, corr = T))
+
+# Without nV
+model.0nV.s <- map(
+  alist(
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bVer*VerbalIQ.s + bSoc*SocialIQ.s, #linear model
+    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bVer ~ dnorm(0, 10),
+    bSoc ~ dnorm(0, 10),
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(model.0nV.s, corr = T)
+precis_plot(precis(model.0nV.s, corr = T))
+
+
+# Without V
+model.0V.s <- map(
+  alist(
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bNon*NonVerbalIQ.s + bSoc*SocialIQ.s, #linear model
+    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
+    bSoc ~ dnorm(0, 10),
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(model.0V.s, corr = T)
+precis_plot(precis(model.0V.s, corr = T))
+
+# Without S
+model.0S.s <- map(
+  alist(
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bNon*NonVerbalIQ.s + bVer*VerbalIQ.s, #linear model
+    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
+    bVer ~ dnorm(0, 10),
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(model.0S.s, corr = T)
+precis_plot(precis(model.0S.s, corr = T))
+
+# As expected from the all-in models - doesn't help to have all of them?
+# can u only say that when they overlap with 0?
+
+### ----------------------------------------------- ###
+### QUALITY OF MODEL - PERCENTILE INTERVAL OF MEAN ###
+### ----------------------------------------------- ###
+
+precis_plot(model.all.s)
+
+pairs( ~ ADOS.s + NonVerbalIQ.s + VerbalIQ.s + SocialIQ.s ,
+       data=d1 , col=rangi2 )
+
+cor(d1$NonVerbalIQ.s, d1$VerbalIQ.s)
+cor(d1$NonVerbalIQ.s, d1$SocialIQ.s)
+cor(d1$VerbalIQ.s, d1$SocialIQ.s)
+
+
+```
+
+
 3. Let's now include also the TD children. Does it make sense to ask whether IQ and ADOS are related? Motivate your answer. In any case, if you wanted to build a model to answer that question, which model would you build? Run the model, assess its quality, write a few lines interpreting the results.
+
+```{r}
+d = read.csv("Assignment3Data.csv")
+d_d= subset(d, Visit == 1)
+d1 = d_d[complete.cases(d_d),]
+
+# Do centering and standardizing to scale and because of correlations
+# Centering
+d1$ADOS.c = d1$ADOS - mean(d1$ADOS)
+d1$VerbalIQ.c = d1$VerbalIQ - mean(d1$VerbalIQ)
+d1$NonVerbalIQ.c = d1$NonVerbalIQ - mean(d1$NonVerbalIQ)
+d1$SocialIQ.c = d1$SocialIQ - mean(d1$SocialIQ)
+
+# Standardize
+d1$NonVerbalIQ.s <- (d1$NonVerbalIQ.c-mean(d1$NonVerbalIQ.c))/sd(d1$NonVerbalIQ.c)
+d1$VerbalIQ.s <- (d1$VerbalIQ.c-mean(d1$VerbalIQ.c))/sd(d1$VerbalIQ.c)
+d1$SocialIQ.s <- (d1$SocialIQ.c-mean(d1$SocialIQ.c))/sd(d1$SocialIQ.c)
+d1$ADOS.s <- (d1$ADOS.c-mean(d1$ADOS.c))/sd(d1$ADOS.c)
+
+# Try to predict ADOS from all kids
+model.all.s <- map(
+  alist(
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bNon*NonVerbalIQ.s + bVer*VerbalIQ.s + bSoc*SocialIQ.s, #linear model
+    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
+    bVer ~ dnorm(0, 10),
+    bSoc ~ dnorm(0, 10),
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(model.all.s, corr = T)
+precis_plot(precis(model.all.s, corr = T))
+# Seems like SocialIQ really makes a difference
+
+# What if I try to see a difference in Social IQ for the 2 groups?
+S_model <- map(
+  alist(
+    SocialIQ.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS.s, #linear model
+    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(S_model, corr = T)
+precis_plot(precis(S_model, corr = T))
+```
+
 
 4. Let's discuss contents:
 4.1. You have three scores for IQ, do they show shared variance? Is that the same in TD and ASD? What does that tell us about IQ?
@@ -79,4 +458,88 @@ precis(model)
 5.1. Let's assume that ADOS has a measurement error of 1. How would you model that in any of the previous models? 
 5.2. We know that IQ has an estimated measurement error of 2.12. How would you include that? 
 
+
+```{r}
+## More ways to add uncertainity for mm 1st question
+# Need to add uncertainty on the plot, get samples of posterior distribution
+post = extract.samples(model.c)
+
+post[1:5,]
+
+N = 33 #all people
+dN = d1[1:N,]
+mN <- map(
+  alist(
+    VerbalIQ ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*ADOS, #linear model
+    a ~ dnorm(18, 7.6), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = dN
+)
+
+# Now plot 20 of these lines to see the uncertainty
+## Extract the 20 samples
+post = extract.samples(mN, n=20)
+
+## Display raw data and sample size
+plot(dN$ADOS , dN$VerbalIQ ,
+     xlim=range(d1$ADOS) , ylim=range(d1$VerbalIQ) ,
+     col=rangi2 , xlab="ADOS" , ylab="Verbal IQ" ) + 
+  mtext(concat("N = ",N)) + 
+  for ( i in 1:20 ) abline(a=post$a[i] , b=post$b[i] , col=col.alpha("black",0.3) )
+## Plot the lines, with transparency
+
+#Run for NonVerbal IQ
+
+
+
+
+
+#################
+
+
+#uhm
+mu = link(model.c)
+str(mu) #values for u, each row is a sample from posterior
+
+# define sequence of weights to compute predictions for
+# these values will be on the horizontal axis
+ADOS.seq <- seq( from=0 , to=21 , by=1 )
+# use link to compute mu
+# for each sample from posterior
+# and for each weight in weight.seq
+mu <- link( model , data = data.frame(weight=ADOS.seq) )
+str(mu)
+
+##################
+
+
+# Get the samples
+posterior = extract.samples(model)
+plot(posterior)
+dens(posterior)
+
+# use link
+mu <- link(model)
+plot(mu)
+dens(mu)
+
+plot(d1$NonVerbalIQ ~ d1$ADOS)
+plot(d1$VerbalIQ ~ d1$ADOS)
+plot(d1$SocialIQ ~ d1$ADOS)
+
+#sampling actual outcomes
+sim = sim(model, data=list(weights))
+#sample(p_grid , prob=posterior_RF , size=1e4 , replace=TRUE )
+
+# Sample all possible p's, weigh them with posterior likelihood of each value of p
+w <- rbinom( 1e4 , size = 10 , prob = samples)
+
+# Make the histogram
+simplehist(w)
+
+#flist = alist( )
+```
 
