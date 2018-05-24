@@ -28,7 +28,7 @@ P.P.P.S. At least one plot for results and a plot for quality of each model (her
 1.3. Social IQ and ADOS
 
 ```{r}
-pacman::p_load(ggplot2, rethinking, gridExtra)
+pacman::p_load(ggplot2, rethinking, gridExtra, dplyr)
 
 ### ---------------- ###
 ### PRELIMINARY WORK ###
@@ -95,10 +95,11 @@ d1$ADOS.s = scale(d1$ADOS)
 mean(d1$VerbalIQ)
 mean(d1$NonVerbalIQ)
 mean(d1$SocialIQ)
+mean(d1$ADOS)
 sd(d1$VerbalIQ)
 sd(d1$NonVerbalIQ)
 sd(d1$SocialIQ)
-
+sd(d1$ADOS)
 ```
 
 
@@ -108,14 +109,12 @@ sd(d1$SocialIQ)
 ### BUILD MODELS FOR 3 IQ's ###
 ### ----------------------- ###
 
-# Use non-scaled values for the models with single predictors (to be able to interpret better)
-
 # The model for verbal IQ
 V_model <- map(
   alist(
-    VerbalIQ ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS, #linear model
-    a ~ dnorm(17.5, 7.2), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+  ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*VerbalIQ.s, #linear model
+    a ~ dnorm(0, 5), #ADOS prior, whats the expected Verbal IQ when ADOS is 0?
     b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
@@ -124,26 +123,110 @@ V_model <- map(
 precis(V_model, corr = T)
 precis_plot(precis(V_model, corr = T))
 
+#Plot results
+#Create many different posteriors
+post <- extract.samples(V_model) 
+
+#a function that calculates mu for a specific x-value
+mu.link <- function(x) post$a + post$b*x
+#Make a list of numbers for VerbalIQ
+Predictor_sequence <- seq(from=min(d1$VerbalIQ.s), to=max(d1$VerbalIQ.s) , by=0.1 )
+#Calculate the mu for each of the verbalIQ's
+mu <- sapply( Predictor_sequence , mu.link )
+#What's the mean mu?
+mu_mean <- apply( mu , 2 , mean )
+#High Probability Density Intervals
+mu_HPDI <- apply( mu , 2 , HPDI , prob=0.89 )
+
+#Simulate mean outputs
+Output_sim <- sim( V_model , data=list(VerbalIQ.s=Predictor_sequence) )
+
+#Create percentile interval - the 89% most likely area
+Output_PI <- apply( Output_sim , 2 , PI , prob=0.89 )
+
+#Plot the raw data
+plot( ADOS.s ~ VerbalIQ.s , d1 , col=col.alpha(rangi2,0.5) )
+# the MAP model line
+lines( Predictor_sequence , mu_mean )
+# draw high probability density intervals for line
+shade( mu_HPDI , Predictor_sequence ) 
+# draw PI region for simulated heights
+shade( Output_PI , Predictor_sequence )
+
+
+###ASSESSING QUALITY:
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,0.6),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,0.6), xlab = "ADOS")
+
+#dens(mu - d1$ADOS.s)
+```
+
+
+```{r}
+
+#### ------- ###
 # The model for nonverbal IQ
 nV_model <- map(
   alist(
-    NonVerbalIQ ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS, #linear model
-    a ~ dnorm(26.8, 5.5), #NonVerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*NonVerbalIQ.s, #linear model
+    a ~ dnorm(0, 5), #NonVerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
     b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
 )
+
 precis(nV_model, corr = T)
 precis_plot(precis(nV_model, corr = T))
+
+#Plot results
+#Create many different posteriors
+post <- extract.samples(nV_model) 
+
+#a function that calculates mu for a specific x-value
+mu.link <- function(x) post$a + post$b*x
+#Make a list of numbers for VerbalIQ
+Predictor_sequence <- seq(from=min(d1$NonVerbalIQ.s), to=max(d1$NonVerbalIQ.s) , by=0.1 )
+#Calculate the mu for each of the verbalIQ's
+mu <- sapply( Predictor_sequence , mu.link )
+#What's the mean mu?
+mu_mean <- apply( mu , 2 , mean )
+#High Probability Density Intervals
+mu_HPDI <- apply( mu , 2 , HPDI , prob=0.89 )
+
+#Simulate mean outputs
+Output_sim <- sim( nV_model , data=list(NonVerbalIQ.s=Predictor_sequence) )
+
+#Create percentile interval - the 89% most likely area
+Output_PI <- apply( Output_sim , 2 , PI , prob=0.89 )
+
+#Plot the raw data
+plot( ADOS.s ~ NonVerbalIQ.s , d1 , col=col.alpha(rangi2,0.5) )
+# the MAP model line
+lines( Predictor_sequence , mu_mean )
+# draw high probability density intervals for line
+shade( mu_HPDI , Predictor_sequence ) 
+# draw PI region for simulated heights
+shade( Output_PI , Predictor_sequence )
+
+
+###ASSESSING QUALITY:
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,0.6),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,0.6), xlab = "ADOS")
+
+```
+
+```{r}
 
 # The model for social IQ
 S_model <- map(
   alist(
-    SocialIQ ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS, #linear model
-    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + b*SocialIQ.s, #linear model
+    a ~ dnorm(0, 5), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
     b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
@@ -152,48 +235,47 @@ S_model <- map(
 precis(S_model, corr = T)
 precis_plot(precis(S_model, corr = T))
 
-## Uhh, scaled versions:
-# The model for verbal IQ
-V_model <- map(
-  alist(
-    VerbalIQ ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS.s, #linear model
-    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
-    sigma ~ dunif(0, 50) #sigma prior
-  ) ,
-  data = d1
-)
-precis(V_model, corr = T)
-precis_plot(precis(V_model, corr = T))
+#Plot results
+#Create many different posteriors
+post <- extract.samples(S_model) 
 
-# The model for nonverbal IQ
-nV_model <- map(
-  alist(
-    NonVerbalIQ.s ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS.s, #linear model
-    a ~ dnorm(26.8, 5.5), #NonVerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
-    sigma ~ dunif(0, 50) #sigma prior
-  ) ,
-  data = d1
-)
-precis(nV_model, corr = T)
-precis_plot(precis(nV_model, corr = T))
+#a function that calculates mu for a specific x-value
+mu.link <- function(x) post$a + post$b*x
+#Make a list of numbers for VerbalIQ
+Predictor_sequence <- seq(from=min(d1$SocialIQ.s), to=max(d1$SocialIQ.s) , by=0.1 )
+#Calculate the mu for each of the verbalIQ's
+mu <- sapply( Predictor_sequence , mu.link )
+#What's the mean mu?
+mu_mean <- apply( mu , 2 , mean )
+#High Probability Density Intervals
+mu_HPDI <- apply( mu , 2 , HPDI , prob=0.89 )
 
-# The model for social IQ
-S_model <- map(
-  alist(
-    SocialIQ.s ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS.s, #linear model
-    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
-    sigma ~ dunif(0, 50) #sigma prior
-  ) ,
-  data = d1
-)
-precis(S_model, corr = T)
-precis_plot(precis(S_model, corr = T))
+#Simulate mean outputs
+Output_sim <- sim( S_model , data=list(SocialIQ.s=Predictor_sequence) )
+
+#Create percentile interval - the 89% most likely area
+Output_PI <- apply( Output_sim , 2 , PI , prob=0.89 )
+
+#Plot the raw data
+plot( ADOS.s ~ SocialIQ.s , d1 , col=col.alpha(rangi2,0.5) )
+# the MAP model line
+lines( Predictor_sequence , mu_mean )
+# draw high probability density intervals for line
+shade( mu_HPDI , Predictor_sequence ) 
+# draw PI region for simulated heights
+shade( Output_PI , Predictor_sequence )
+
+
+###ASSESSING QUALITY:
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,0.6),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,0.6), xlab = "ADOS")
+
+
+```
+
+```{r}
+
 ```
 
 
@@ -320,10 +402,10 @@ model.all.s <- map(
   alist(
     ADOS.s ~ dnorm(mu,sigma), #likelihood
     mu <- a + bNon*NonVerbalIQ.s + bVer*VerbalIQ.s + bSoc*SocialIQ.s, #linear model
-    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
-    bVer ~ dnorm(0, 10),
-    bSoc ~ dnorm(0, 10),
+    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    bVer ~ dnorm(0, 5),
+    bSoc ~ dnorm(0, 5),
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
@@ -331,14 +413,51 @@ model.all.s <- map(
 precis(model.all.s, corr = T)
 precis_plot(precis(model.all.s, corr = T))
 
+#Predictive Posterior check
+Output_sim <- sim( model.all.s, data=d1)
+
+#Plotting predicted and observed distributions
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,0.6),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,0.6), xlab = "ADOS")
+```
+```{r}
+# Without V
+model.0V.s <- map(
+  alist(
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bNon*NonVerbalIQ.s + bSoc*SocialIQ.s, #linear model
+    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    bSoc ~ dnorm(0, 5),
+    sigma ~ dunif(0, 50) #sigma prior
+  ) ,
+  data = d1
+)
+precis(model.0V.s, corr = T)
+precis_plot(precis(model.0V.s, corr = T))
+
+#Predictive Posterior check
+Output_sim <- sim( model.0V.s, data=d1)
+
+#Plotting predicted and observed distributions
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,0.6),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,0.6), xlab = "ADOS")
+```
+
+
+```{r}
+# -------------# 
+
 # Without nV
 model.0nV.s <- map(
   alist(
     ADOS.s ~ dnorm(mu,sigma), #likelihood
     mu <- a + bVer*VerbalIQ.s + bSoc*SocialIQ.s, #linear model
-    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    bVer ~ dnorm(0, 10),
-    bSoc ~ dnorm(0, 10),
+    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bVer ~ dnorm(0, 5),
+    bSoc ~ dnorm(0, 5),
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
@@ -347,29 +466,14 @@ precis(model.0nV.s, corr = T)
 precis_plot(precis(model.0nV.s, corr = T))
 
 
-# Without V
-model.0V.s <- map(
-  alist(
-    ADOS.s ~ dnorm(mu,sigma), #likelihood
-    mu <- a + bNon*NonVerbalIQ.s + bSoc*SocialIQ.s, #linear model
-    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
-    bSoc ~ dnorm(0, 10),
-    sigma ~ dunif(0, 50) #sigma prior
-  ) ,
-  data = d1
-)
-precis(model.0V.s, corr = T)
-precis_plot(precis(model.0V.s, corr = T))
-
 # Without S
 model.0S.s <- map(
   alist(
     ADOS.s ~ dnorm(mu,sigma), #likelihood
     mu <- a + bNon*NonVerbalIQ.s + bVer*VerbalIQ.s, #linear model
-    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
-    bVer ~ dnorm(0, 10),
+    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    bVer ~ dnorm(0, 5),
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
@@ -384,7 +488,7 @@ precis_plot(precis(model.0S.s, corr = T))
 ### QUALITY OF MODEL - PERCENTILE INTERVAL OF MEAN ###
 ### ----------------------------------------------- ###
 
-precis_plot(model.all.s)
+precis_plot(precis(model.all.s, corr = T))
 
 pairs( ~ ADOS.s + NonVerbalIQ.s + VerbalIQ.s + SocialIQ.s ,
        data=d1 , col=rangi2 )
@@ -422,10 +526,10 @@ model.all.s <- map(
   alist(
     ADOS.s ~ dnorm(mu,sigma), #likelihood
     mu <- a + bNon*NonVerbalIQ.s + bVer*VerbalIQ.s + bSoc*SocialIQ.s, #linear model
-    a ~ dnorm(0, 10), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    bNon ~ dnorm(0, 10), #expected change for a unit of 1, 5 means am agnostic
-    bVer ~ dnorm(0, 10),
-    bSoc ~ dnorm(0, 10),
+    a ~ dnorm(0, 5), #VerbalIQ prior, whats the expected Verbal IQ when ADOS is 0?
+    bNon ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    bVer ~ dnorm(0, 5),
+    bSoc ~ dnorm(0, 5),
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
@@ -434,19 +538,40 @@ precis(model.all.s, corr = T)
 precis_plot(precis(model.all.s, corr = T))
 # Seems like SocialIQ really makes a difference
 
-# What if I try to see a difference in Social IQ for the 2 groups?
-S_model <- map(
+#Predictive Posterior check
+Output_sim <- sim( model.all.s, data=d1)
+
+#Plotting predicted and observed distributions
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,1),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,1), xlab = "ADOS")
+```
+
+```{r}
+
+# Try to predict ADOS from only social IQ
+model.S <- map(
   alist(
-    SocialIQ.s ~ dnorm(mu,sigma), #likelihood
-    mu <- a + b*ADOS.s, #linear model
-    a ~ dnorm(77.2, 10.4), #SocialIQ prior, whats the expected Verbal IQ when ADOS is 0?
-    b ~ dnorm(0, 5), #expected change for a unit of 1, 5 means am agnostic
+    ADOS.s ~ dnorm(mu,sigma), #likelihood
+    mu <- a + bSoc*SocialIQ.s, #linear model
+    a ~ dnorm(0, 5),
+    bSoc ~ dnorm(0, 5),
     sigma ~ dunif(0, 50) #sigma prior
   ) ,
   data = d1
 )
-precis(S_model, corr = T)
-precis_plot(precis(S_model, corr = T))
+
+precis(model.S, corr = T)
+precis_plot(precis(model.S, corr = T))
+# Seems like SocialIQ really makes a difference
+
+#Predictive Posterior check
+Output_sim <- sim( model.S, data=d1)
+
+#Plotting predicted and observed distributions
+dens(Output_sim, col = "red", xlim = c(-4, 4), ylim = c(0,1),  xlab = "ADOS")
+par(new=TRUE)
+dens(d1$ADOS.s, xlim = c(-4, 4), ylim = c(0,1), xlab = "ADOS")
 ```
 
 
